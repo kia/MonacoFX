@@ -39,8 +39,8 @@ public class SystemClipboardWrapper {
 
 	private final KeyCodeCombination KEY_CODE_CTRL_C = new KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN);
 	private final KeyCodeCombination KEY_CODE_CTRL_X = new KeyCodeCombination(KeyCode.X, KeyCombination.SHORTCUT_DOWN);
-	private final KeyCodeCombination KEY_CODE_CTRL_INSERT = new KeyCodeCombination(KeyCode.INSERT, KeyCombination.SHORTCUT_DOWN);
-	private final KeyCodeCombination KEY_CODE_CTRL_DELETE = new KeyCodeCombination(KeyCode.DELETE, KeyCombination.SHORTCUT_DOWN);
+	private final KeyCodeCombination KEY_CODE_SHIFT_INSERT = new KeyCodeCombination(KeyCode.INSERT, KeyCombination.SHIFT_DOWN);
+	private final KeyCodeCombination KEY_CODE_SHIFT_DELETE = new KeyCodeCombination(KeyCode.DELETE, KeyCombination.SHIFT_DOWN);
 
 	/**
 	 * Puts the text into clipboard.
@@ -66,13 +66,13 @@ public class SystemClipboardWrapper {
 		if (event.getEventType().getName().equals("KEY_PRESSED")
 				&& KEY_CODE_CTRL_X.match(event)
 				|| KEY_CODE_CTRL_C.match(event)
-				|| KEY_CODE_CTRL_DELETE.match(event)
-				|| KEY_CODE_CTRL_INSERT.match(event)) {
+				|| KEY_CODE_SHIFT_DELETE.match(event)
+				|| KEY_CODE_SHIFT_INSERT.match(event)) {
 			Object obj = getSelectionObjectCallBack.call(null);
 			String selectedText = String.valueOf(obj);
 			if ((readOnly && KEY_CODE_CTRL_X.match(event))
-					|| (readOnly && KEY_CODE_CTRL_INSERT.match(event))
-					|| (readOnly && KEY_CODE_CTRL_DELETE.match(event))
+					|| (readOnly && KEY_CODE_SHIFT_INSERT.match(event))
+					|| (readOnly && KEY_CODE_SHIFT_DELETE.match(event))
 					|| selectedText.isEmpty()
 			) {
 				event.consume();

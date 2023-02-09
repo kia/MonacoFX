@@ -27,9 +27,9 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectProperty;
-import javafx.beans.value.ChangeListener;
 import javafx.concurrent.Worker;
 import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 import javafx.geometry.HPos;
 import javafx.geometry.VPos;
 import javafx.scene.input.KeyCode;
@@ -44,6 +44,9 @@ import netscape.javascript.JSException;
 import netscape.javascript.JSObject;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
@@ -64,11 +67,12 @@ public class MonacoFX extends Region {
     private boolean readOnly;
 
     private Worker.State workerState;
-    private Timeline oneSecondWonder;
+
+    private Set<AbstractEditorAction> addedActions;
 
     public MonacoFX() {
         view = new WebView();
-
+        addedActions = Collections.synchronizedSet(new HashSet<>());
         getChildren().add(view);
         engine = view.getEngine();
         String url = getClass().getResource(EDITOR_HTML_RESOURCE_LOCATION).toExternalForm();
@@ -113,19 +117,21 @@ public class MonacoFX extends Region {
             }
         });
         engine.load(url);
-        waitForLoad();
-        addClipboardFunctions();
+        waitForSucceededWorkerState();
     }
 
     /**
-     * wait a bit
+     * wait for succeeded state of the load worker
      */
-    private void waitForLoad() {
-        oneSecondWonder = new Timeline(new KeyFrame(Duration.seconds(1), (ActionEvent event) -> {
-            if ( Worker.State.SUCCEEDED == workerState) {
+    private void waitForSucceededWorkerState() {
+        Timeline oneSecondWonder = new Timeline();
+        EventHandler<ActionEvent> actionEventEventHandler = (ActionEvent event) -> {
+            if (Worker.State.SUCCEEDED == workerState) {
                 oneSecondWonder.stop();
             }
-        }));
+        };
+        KeyFrame keyFrame = new KeyFrame(Duration.seconds(1), actionEventEventHandler);
+        oneSecondWonder.getKeyFrames().setAll(keyFrame);
         oneSecondWonder.setCycleCount(15);
         oneSecondWonder.play();
     }
@@ -133,10 +139,6 @@ public class MonacoFX extends Region {
     public void reload() {
         engine.reload();
         setReadonly(isReadOnly());
-    }
-
-    private void addClipboardFunctions() {
-        addEventFilter(KeyEvent.KEY_PRESSED, event -> systemClipboardWrapper.handleCopyCutKeyEvent(event, (a) -> getSelectionObject(), readOnly));
     }
 
     private Object getSelectionObject() {
@@ -159,20 +161,6 @@ public class MonacoFX extends Region {
         });
     }
 
-    protected void postConstruct() {
-        addPasteAction();
-        addCutAction();
-    }
-
-    private void addPasteAction() {
-        final PasteAction pasteAction = new PasteAction();
-        addContextMenuAction(pasteAction);
-    }
-
-    private void addCutAction() {
-        final CutAction cutAction = new CutAction();
-        addContextMenuAction(cutAction);
-    }
     @Override protected double computePrefWidth(double height) {
         return view.prefWidth(height);
     }
@@ -208,10 +196,32 @@ public class MonacoFX extends Region {
      * @param action {@link eu.mihosoft.monacofx.AbstractEditorAction} call back object as abstract action.
      */
     public void addContextMenuAction(AbstractEditorAction action) {
-        executeJavaScriptLambda(action, param -> {
-            doAddContextMenuAction(action);
-            return null;
-        });
+        if (!readOnly || action.isVisibleOnReadonly() ) {
+            executeJavaScriptLambda(action, param -> {
+                if (!addedActions.contains(action)) {
+                    doAddContextMenuAction(action);
+                }
+                return null;
+            });
+        }
+    }
+
+    public void removeContextMenuAction(AbstractEditorAction action) {
+        if (addedActions.contains(action)) {
+            removeAction(action);
+            addedActions.remove(action);
+        }
+    }
+
+    public void removeContextMenuActions() {
+        addedActions.forEach(this::removeAction);
+        addedActions.clear();
+    }
+    private void removeAction(AbstractEditorAction action) {
+        String script = String.format("removeAction('%s');", action.getActionId());
+        getWebEngine().executeScript(script);
+        JSObject window = (JSObject) getWebEngine().executeScript("window");
+        window.removeMember(action.getName());
     }
 
     public boolean isReadOnly() {
@@ -247,7 +257,7 @@ public class MonacoFX extends Region {
         try {
             getWebEngine().executeScript(
                     "editorView.addAction({\n" +
-                            "id: \"" + action.getActionId() + actionName + "\",\n" +
+                            "id: \"" + action.getActionId() + "\",\n" +
                             "label: \"" + action.getLabel() + "\",\n" +
                             "contextMenuGroupId: \"" + action.getContextMenuGroupId() + "\",\n" +
                             "precondition: " + precondition + ",\n" +
@@ -259,9 +269,11 @@ public class MonacoFX extends Region {
                             "}\n" +
                         "});"
             );
+            addedActions.add(action);
         } catch (JSException exception) {
             LOGGER.log(Level.SEVERE, exception.getMessage());
         }
+
     }
 
     private void executeJavaScriptLambda(Object parameter , Callback<Object, Void> callback) {
@@ -269,39 +281,36 @@ public class MonacoFX extends Region {
         if (Worker.State.SUCCEEDED == stateProperty.getValue()) {
             callback.call(parameter);
         } else {
-            ChangeListener<Worker.State> stateChangeListener = (o, old, state) -> {
-                if (Worker.State.SUCCEEDED == state) {
-                    AtomicBoolean jsDone = new AtomicBoolean(false);
-                    AtomicInteger attempts = new AtomicInteger();
-                    Thread thread = new Thread(() -> {
-                        while (!jsDone.get()) {
-                            // check if JS execution is done.
-                            Platform.runLater(() -> {
-                                JSObject window = (JSObject) engine.executeScript("window");
-                                Object jsEditorObj = window.call("getEditorView");
-                                if (jsEditorObj instanceof JSObject) {
-                                    callback.call(parameter);
-                                    jsDone.set(true);
-                                }
-                            });
-                            if (attempts.getAndIncrement() > 10) {
-                                throw new RuntimeException(
-                                        "Cannot initialize editor (JS execution not complete). Max number of attempts reached."
-                                );
-                            }
-                            if (!jsDone.get()) {
-                                try {
-                                    Thread.sleep(500);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                            }
+            waitForSucceededWorkerState();
+            AtomicBoolean jsDone = new AtomicBoolean(false);
+            AtomicInteger attempts = new AtomicInteger();
+            Thread thread = new Thread(() -> {
+                while (!jsDone.get()) {
+                    // check if JS execution is done.
+                    Platform.runLater(() -> {
+                        JSObject window = (JSObject) engine.executeScript("window");
+                        Object jsEditorObj = window.call("getEditorView");
+                        if (jsEditorObj instanceof JSObject) {
+                            callback.call(parameter);
+                            jsDone.set(true);
                         }
                     });
-                    thread.start();
+                    if (attempts.getAndIncrement() > 10) {
+                        throw new RuntimeException(
+                                "Cannot initialize editor (JS execution not complete). Max number of attempts reached."
+                        );
+                    }
+                    if (!jsDone.get()) {
+                        try {
+                            Thread.sleep(500);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
-            };
-            stateProperty.addListener(stateChangeListener);
+            });
+            thread.start();
+
         }
     }
 }

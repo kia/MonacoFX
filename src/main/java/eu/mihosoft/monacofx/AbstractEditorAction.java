@@ -1,5 +1,7 @@
 package eu.mihosoft.monacofx;
 
+import java.util.Objects;
+
 /**
  * This is a Call Back class where the action method can be implemented for a custom usage.
  * Using @see {@link MonacoFX#addContextMenuAction} the implementation of this class can be added to
@@ -95,5 +97,20 @@ public abstract class AbstractEditorAction {
 
     public void setKeyBindings(String... keyBindings) {
         this.keyBindings = keyBindings;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AbstractEditorAction that = (AbstractEditorAction) o;
+
+        return Objects.equals(actionId, that.actionId);
+    }
+
+    @Override
+    public int hashCode() {
+        return actionId != null ? actionId.hashCode() : 0;
     }
 }

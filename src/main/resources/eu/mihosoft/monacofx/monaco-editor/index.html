@@ -101,7 +101,7 @@
             id: 'editor.action.clipboardCopyAction',
             label: 'Copy',
             contextMenuGroupId: '9_cutcopypaste',
-            keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC],
+            keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Insert, monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC ],
             run: () => {
                 clipboardBridge.copy(editorView.getSelection());
             },
@@ -202,6 +202,19 @@
 
     function getEditorView() {
         return editorView;
+    }
+
+    function removeAction(actionId) {	
+        actionId = "vs.editor.ICodeEditor:1:" + actionId;
+        let menus = require('vs/platform/actions/common/actions').MenuRegistry._menuItems;
+        let contextMenuEntry = [...menus].find(entry => entry[0].id === "EditorContext");
+        let contextMenuLinks = contextMenuEntry[1];                
+        let node = contextMenuLinks._first;
+        do {
+            if (actionId === node.element?.command?.id) {
+                contextMenuLinks._remove(node);
+            }
+        } while ((node = node.next));        
     }
 
 </script>
