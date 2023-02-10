@@ -29,7 +29,7 @@ import netscape.javascript.JSObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Bridge between javascript code and java to add and use system clipboard functionality.
@@ -85,12 +85,45 @@ public class ClipboardBridge {
 	public JSObject paste(JSObject jsSelection, JSObject position) {
 		if (systemClipboardWrapper.hasString()) {
 			String pasteString = systemClipboardWrapper.getString();
-			String originText = document.getText();
+			String originText = removeSelection(jsSelection, document.getText());
 			String changedText = addPasteString(jsSelection, pasteString, originText);
 			document.updateText(changedText);
-			calcNewCursorPosition(position, pasteString);
+			calcNewCursorPosition(jsSelection, position, pasteString);
 		}
 		return position;
+	}
+
+	protected String removeSelection(JSObject jsSelection, String originText) {
+		int startLineNumber = getNumber(jsSelection, "startLineNumber");
+		int startColumn = getNumber(jsSelection, "startColumn");
+		int endLineNumber = getNumber(jsSelection, "endLineNumber");
+		int endColumn = getNumber(jsSelection, "endColumn");
+		if (startLineNumber < endLineNumber || (startLineNumber == endLineNumber && startColumn < endColumn)) {
+			String[] lines = originText.split("\n", -1);
+			AtomicInteger count = new AtomicInteger(0);
+			AtomicInteger startPosition = new AtomicInteger(0);
+			AtomicInteger endPosition = new AtomicInteger(0);
+			Arrays.stream(lines).forEach(line -> {
+				int lineNr = count.incrementAndGet();
+				if (lineNr < startLineNumber) {
+					startPosition.getAndAdd(line.length() + 1); // +1 is needed to count \n at the end of the line
+				}
+				if (lineNr == startLineNumber) {
+					startPosition.getAndAdd(startColumn - 1);
+				}
+				if (lineNr < endLineNumber) {
+					endPosition.getAndAdd(line.length() + 1);
+				}
+				if (lineNr == endLineNumber) {
+					endPosition.getAndAdd(endColumn - 1);
+				}
+			});
+			String substring1 = originText.substring(0, startPosition.get());
+			String substring2 = originText.substring(endPosition.get(), originText.length());
+			return substring1 + substring2;
+		} else {
+			return originText;
+		}
 	}
 
 	private String addPasteString(JSObject jsSelection, String pasteString, String originText) {
@@ -101,7 +134,7 @@ public class ClipboardBridge {
 		if (startLineNumber < lines.length) {
 			String beforeMousePosition = lines[startLineNumber].substring(0, startColumn);
 			String afterMousePosition = lines[startLineNumber].substring(startColumn);
-			lines[startLineNumber] = beforeMousePosition + pasteString + afterMousePosition;;
+			lines[startLineNumber] = beforeMousePosition + pasteString + afterMousePosition;
 		} else {
 			List<String> list = new ArrayList<>(Arrays.asList(lines));
 			list.add(pasteString);
@@ -110,15 +143,16 @@ public class ClipboardBridge {
 		return String.join("\n", lines);
 	}
 
-	private void calcNewCursorPosition(JSObject position, String string) {
-		int lineNumber = getNumber(position, "lineNumber");
-		int column = getNumber(position, "column");
-		long count = string.split("\n", -1).length - 1;
+	private void calcNewCursorPosition(JSObject selection, JSObject position, String string) {
+		int lineNumber = getNumber(selection, "startLineNumber");
+		int column = getNumber(selection, "startColumn");
+		String[] split = string.split("\n", -1);
+		long count = split.length - 1;
 		position.setMember("lineNumber", lineNumber + count);
 
-		Optional<String> lastLine = string.lines().skip(count).findFirst();
-		if (lastLine.isPresent()) {
-			position.setMember("column", column + lastLine.get().length());
+		if (count > 0) {
+			String lastLine = split[(int) count];
+			position.setMember("column", lastLine.length() + 1);
 		} else {
 			position.setMember("column", column + string.length());
 		}

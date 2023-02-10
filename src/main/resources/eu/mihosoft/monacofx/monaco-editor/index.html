@@ -204,6 +204,9 @@
         return editorView;
     }
 
+    // how to remove actions:
+    // https://github.com/microsoft/monaco-editor/issues/1567
+
     function removeAction(actionId) {	
         actionId = "vs.editor.ICodeEditor:1:" + actionId;
         let menus = require('vs/platform/actions/common/actions').MenuRegistry._menuItems;

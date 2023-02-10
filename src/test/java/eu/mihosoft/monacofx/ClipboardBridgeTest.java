@@ -72,11 +72,42 @@ public class ClipboardBridgeTest {
 	@Test
 	public void paste()  {
 		// given
-		when(document.getText()).thenReturn("some text where at this position '' something is pasted");
+		when(document.getText()).thenReturn("replace 'blablabu' with 'clipboard-text'");
+
+		JSObject selection = Mockito.mock(JSObject.class);
+		when(selection.getMember("startLineNumber")).thenReturn(1);
+		when(selection.getMember("startColumn")).thenReturn(10);
+		when(selection.getMember("endLineNumber")).thenReturn(1);
+		when(selection.getMember("endColumn")).thenReturn(18);
+
+		JSObject position = Mockito.mock(JSObject.class);
+		when(position.getMember("lineNumber")).thenReturn(1);
+		when(position.getMember("column")).thenReturn(10);
+
+		when(systemClipboardWrapper.hasString()).thenReturn(true);
+		when(systemClipboardWrapper.getString()).thenReturn("clipboard-text");
+
+		// when
+		JSObject paste = clipboardBridge.paste(selection, position);
+
+		// then
+		Mockito.verify(document).updateText(updateTextCapture.capture());
+		assertEquals("replace 'clipboard-text' with 'clipboard-text'", updateTextCapture.getValue());
+
+	}
+
+	@Test
+	public void paste_two_lines_with_selection()  {
+		// given
+		when(document.getText()).thenReturn(
+				"some text where at this position 'bla\n" +
+				"blabu' something is pasted");
 
 		JSObject selection = Mockito.mock(JSObject.class);
 		when(selection.getMember("startLineNumber")).thenReturn(1);
 		when(selection.getMember("startColumn")).thenReturn(35);
+		when(selection.getMember("endLineNumber")).thenReturn(2);
+		when(selection.getMember("endColumn")).thenReturn(6);
 
 		JSObject position = Mockito.mock(JSObject.class);
 		when(position.getMember("lineNumber")).thenReturn(1);
@@ -90,7 +121,9 @@ public class ClipboardBridgeTest {
 
 		// then
 		Mockito.verify(document).updateText(updateTextCapture.capture());
-		assertEquals("some text where at this position 'text in \nclipboard' something is pasted", updateTextCapture.getValue());
+		assertEquals(
+				"some text where at this position 'text in \n" +
+				"clipboard' something is pasted", updateTextCapture.getValue());
 		verify(paste).setMember("lineNumber", 2L);
 		verify(paste).setMember("column", 44);
 
@@ -99,15 +132,15 @@ public class ClipboardBridgeTest {
 	@Test
 	public void pasteAtTheEnd()  {
 		// given
-		when(document.getText()).thenReturn("some text where pasted at the end");
+		when(document.getText()).thenReturn("some text where pasted at the end\n");
 
 		JSObject selection = Mockito.mock(JSObject.class);
 		when(selection.getMember("startLineNumber")).thenReturn(2);
-		when(selection.getMember("startColumn")).thenReturn(0);
+		when(selection.getMember("startColumn")).thenReturn(1);
 
 		JSObject position = Mockito.mock(JSObject.class);
 		when(position.getMember("lineNumber")).thenReturn(2);
-		when(position.getMember("column")).thenReturn(0);
+		when(position.getMember("column")).thenReturn(1);
 
 		when(systemClipboardWrapper.hasString()).thenReturn(true);
 		when(systemClipboardWrapper.getString()).thenReturn("text in clipboard");
@@ -116,8 +149,23 @@ public class ClipboardBridgeTest {
 		// then
 		Mockito.verify(document).updateText(updateTextCapture.capture());
 		assertEquals("some text where pasted at the end\ntext in clipboard", updateTextCapture.getValue());
-		verify(paste).setMember("lineNumber", 2L);
-		verify(paste).setMember("column", 17);
 	}
 
+	@Test
+	public void removeSelection() {
+		JSObject selection = Mockito.mock(JSObject.class);
+		when(selection.getMember("startLineNumber")).thenReturn(2);
+		when(selection.getMember("startColumn")).thenReturn(5);
+		when(selection.getMember("endLineNumber")).thenReturn(2);
+		when(selection.getMember("endColumn")).thenReturn(10);
+		String updatedText = clipboardBridge.removeSelection(selection,
+				"abcdefghijklmn\n" +
+						 "1234" +
+						"56789" +
+						"0123456789\n");
+
+		assertEquals(
+				"abcdefghijklmn\n" +
+				"12340123456789\n", updatedText);
+	}
 }
