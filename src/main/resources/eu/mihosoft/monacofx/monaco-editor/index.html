@@ -207,14 +207,13 @@
     // how to remove actions:
     // https://github.com/microsoft/monaco-editor/issues/1567
 
-    function removeAction(actionId) {	
-        actionId = "vs.editor.ICodeEditor:1:" + actionId;
+    function removeAction(actionId) {
         let menus = require('vs/platform/actions/common/actions').MenuRegistry._menuItems;
         let contextMenuEntry = [...menus].find(entry => entry[0].id === "EditorContext");
         let contextMenuLinks = contextMenuEntry[1];                
         let node = contextMenuLinks._first;
         do {
-            if (actionId === node.element?.command?.id) {
+            if (node.element?.command?.id.endsWith(actionId)) {
                 contextMenuLinks._remove(node);
             }
         } while ((node = node.next));        

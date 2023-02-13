@@ -33,7 +33,6 @@ import javafx.event.EventHandler;
 import javafx.geometry.HPos;
 import javafx.geometry.VPos;
 import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.Region;
 import javafx.scene.robot.Robot;
 import javafx.scene.web.WebEngine;
@@ -206,20 +205,26 @@ public class MonacoFX extends Region {
         }
     }
 
+    public void removeContextMenuActionById(String actionId) {
+        String script = String.format("removeAction('%s');", actionId);
+        executeJavaScriptLambda("", param -> {
+            getWebEngine().executeScript(script);
+            return null;
+        });
+    }
     public void removeContextMenuAction(AbstractEditorAction action) {
         if (addedActions.contains(action)) {
-            removeAction(action);
+            removeActionObject(action);
             addedActions.remove(action);
         }
     }
 
     public void removeContextMenuActions() {
-        addedActions.forEach(this::removeAction);
+        addedActions.forEach(this::removeActionObject);
         addedActions.clear();
     }
-    private void removeAction(AbstractEditorAction action) {
-        String script = String.format("removeAction('%s');", action.getActionId());
-        getWebEngine().executeScript(script);
+    private void removeActionObject(AbstractEditorAction action) {
+        removeContextMenuActionById(action.getActionId());
         JSObject window = (JSObject) getWebEngine().executeScript("window");
         window.removeMember(action.getName());
     }
