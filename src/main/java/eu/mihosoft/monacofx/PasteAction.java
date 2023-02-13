@@ -17,7 +17,9 @@ public class PasteAction extends AbstractEditorAction {
         setRunScript("let position = editor.getPosition();\n"
                 + "let newPosition = clipboardBridge.paste(editor.getSelection(), position);\n"
                 + "editor.setPosition(newPosition);\n"
-                + "editor.focus();");
+                + "editor.focus();"
+                + "const position: any  = this.editor?.getPosition();\n"
+                + "this.editor?.setPosition(position);");
     }
 
     @Override
