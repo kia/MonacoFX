@@ -91,6 +91,7 @@ public class MonacoFX extends Region {
                         Platform.runLater(() -> {
                             JSObject window = (JSObject) engine.executeScript("window");
                             window.setMember("clipboardBridge", clipboardBridge);
+                            window.setMember("javaBridge", this);
                             Object jsEditorObj = window.call("getEditorView");
                             if (jsEditorObj instanceof JSObject) {
                                 editor.setEditor(window, (JSObject) jsEditorObj);
@@ -119,6 +120,10 @@ public class MonacoFX extends Region {
         waitForSucceededWorkerState();
     }
 
+//    /**
+//     * implementation of close could be different in subclasses.
+//     */
+//    abstract public void close();
     /**
      * wait for succeeded state of the load worker
      */
