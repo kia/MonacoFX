@@ -71,7 +71,7 @@
             mouseWheelScrollSensitivity: 0.1,
             mouseWheelZoom: true,
             smoothScrolling: false,
-            scrollBeyondLastLine: true,
+            scrollBeyondLastLine: false,
             fontSize: "12px",
             wordWrapColumn: 80,
             wordWrapMinified: true,
@@ -96,7 +96,6 @@
 
         const model = editorView.getModel();
         model.setEOL(monaco.editor.EndOfLinePreference.LF);
-
         editorView.addCommand(monaco.KeyCode.Escape, function() {
             javaBridge.close(); // close responsibility will be taken on java part
         }, '!findWidgetVisible && !inReferenceSearchEditor && !editorHasSelection')
