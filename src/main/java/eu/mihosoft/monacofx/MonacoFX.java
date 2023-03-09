@@ -140,6 +140,17 @@ public class MonacoFX extends Region {
         oneSecondWonder.play();
     }
 
+    public void resetScrollPosition() {
+        executeJavaScriptLambda(null, param -> {
+            super.requestFocus();
+            getWebEngine().executeScript(
+                    "editorView.setScrollPosition({scrollTop: 0});\n" +
+                    "editorView.setPosition({column: 1, lineNumber: 1});"
+            );
+            return null;
+        });
+    }
+
     public void reload() {
         engine.reload();
         setReadonly(isReadOnly());
@@ -228,6 +239,7 @@ public class MonacoFX extends Region {
         addedActions.forEach(this::removeActionObject);
         addedActions.clear();
     }
+
     private void removeActionObject(AbstractEditorAction action) {
         removeContextMenuActionById(action.getActionId());
         JSObject window = (JSObject) getWebEngine().executeScript("window");
