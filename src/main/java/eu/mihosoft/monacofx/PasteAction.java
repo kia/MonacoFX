@@ -7,7 +7,7 @@ public class PasteAction extends AbstractEditorAction {
     public PasteAction() {
         setLabel("Paste");
         setName("Paste");
-        setActionId("editor.action.clipboardPasteAction");
+        setActionId("editor.action.custom.clipboardPasteAction");
         setContextMenuOrder("3");
         setContextMenuGroupId("9_cutcopypaste");
         setVisibleOnReadonly(false);
@@ -18,8 +18,8 @@ public class PasteAction extends AbstractEditorAction {
                 + "let newPosition = clipboardBridge.paste(editor.getSelection(), position);\n"
                 + "editor.setPosition(newPosition);\n"
                 + "editor.focus();"
-                + "const position: any  = this.editor?.getPosition();\n"
-                + "this.editor?.setPosition(position);");
+                + "let cursorPosition = this.editor.getPosition();\n"
+                + "editor.setPosition(cursorPosition);");
     }
 
     @Override

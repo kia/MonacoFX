@@ -96,9 +96,9 @@
 
         const model = editorView.getModel();
         model.setEOL(monaco.editor.EndOfLinePreference.LF);
-        editorView.addCommand(monaco.KeyCode.Escape, function() {
-            javaBridge.close(); // close responsibility will be taken on java part
-        }, '!findWidgetVisible && !inReferenceSearchEditor && !editorHasSelection')
+        // editorView.addCommand(monaco.KeyCode.Escape, function() {
+        //     javaBridge.close(); // close responsibility will be taken on java part
+        // }, '!findWidgetVisible && !inReferenceSearchEditor && !editorHasSelection')
 
         editorView.addAction({
             id: 'editor.action.clipboardCopyAction',
