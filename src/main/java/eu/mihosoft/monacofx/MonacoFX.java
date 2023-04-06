@@ -52,7 +52,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-public class MonacoFX extends Region {
+public abstract class MonacoFX extends Region {
 
     private static final Logger LOGGER = Logger.getLogger(MonacoFX.class.getName());
 
@@ -120,10 +120,10 @@ public class MonacoFX extends Region {
         waitForSucceededWorkerState();
     }
 
-//    /**
-//     * implementation of close could be different in subclasses.
-//     */
-//    abstract public void close();
+    /**
+     * implementation of close could be different in subclasses.
+     */
+    abstract public void close();
     /**
      * wait for succeeded state of the load worker
      */
