@@ -95,7 +95,7 @@
         ]);
 
         const model = editorView.getModel();
-        model.setEOL(monaco.editor.EndOfLinePreference.LF);
+        model.setEOL(monaco.editor.EndOfLineSequence.LF);
 
         editorView.addCommand(monaco.KeyCode.Escape, function() {
             javaBridge.close(); // close responsibility will be taken on java part
@@ -166,6 +166,13 @@
         });
 
     });
+
+    function withSearchTerm(searchTerm) {
+        const model = editorView.getModel();
+        const range = model.findMatches(searchTerm)[0].range;
+        editorView.setSelection(range);
+        editorView.getAction('actions.find').run();
+    }
 
     function isQuickAccessOpen() {
         const domNode = editorView._overlayWidgets["editor.contrib.quickInputWidget"].widget.domNode;

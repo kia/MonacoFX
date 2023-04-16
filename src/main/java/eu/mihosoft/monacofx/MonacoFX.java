@@ -151,6 +151,13 @@ public abstract class MonacoFX extends Region {
         });
     }
 
+    public void openWithSearchTerm(String searchTerm) {
+        executeJavaScriptLambda(null, param -> {
+            getWebEngine().executeScript(String.format("withSearchTerm('%s')", searchTerm));
+            return null;
+        });
+    }
+
     public void reload() {
         engine.reload();
         setReadonly(isReadOnly());
