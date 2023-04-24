@@ -167,11 +167,27 @@
 
     });
 
+    function closeFindAction() {
+        const domNode = editorView._overlayWidgets["editor.contrib.findWidget"].widget._closeBtn._domNode;
+        if(domNode) {
+            domNode.click();
+        }
+    }
+
     function withSearchTerm(searchTerm) {
         const model = editorView.getModel();
         const range = model.findMatches(searchTerm)[0].range;
         editorView.setSelection(range);
         editorView.getAction('actions.find').run();
+    }
+
+    function isFindWidgetOpen() {
+        const domNode = editorView._overlayWidgets["editor.contrib.findWidget"].widget._domNode;
+        if(!domNode || !domNode.children[0]) {
+            return false;
+        }
+        let opened = domNode.children[0].style.display != "none";
+        return opened;
     }
 
     function isQuickAccessOpen() {

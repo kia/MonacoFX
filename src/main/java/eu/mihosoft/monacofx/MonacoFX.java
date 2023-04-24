@@ -140,6 +140,20 @@ public abstract class MonacoFX extends Region {
         oneSecondWonder.play();
     }
 
+    /**
+     * clean up on close.
+     */
+    public void onClose() {
+        closeFindWidget();
+    }
+
+    private void closeFindWidget() {
+        executeJavaScriptLambda(null, param -> {
+            getWebEngine().executeScript("closeFindAction();");
+            return null;
+        });
+    }
+
     public void resetScrollPosition() {
         executeJavaScriptLambda(null, param -> {
             super.requestFocus();
@@ -152,10 +166,8 @@ public abstract class MonacoFX extends Region {
     }
 
     public void openWithSearchTerm(String searchTerm) {
-        executeJavaScriptLambda(null, param -> {
-            getWebEngine().executeScript(String.format("withSearchTerm('%s')", searchTerm));
-            return null;
-        });
+        waitForSucceededWorkerState();
+        getWebEngine().executeScript(String.format("withSearchTerm('%s')", searchTerm));
     }
 
     public void reload() {
