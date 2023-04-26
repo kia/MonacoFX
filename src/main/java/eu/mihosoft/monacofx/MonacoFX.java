@@ -124,6 +124,11 @@ public abstract class MonacoFX extends Region {
      * implementation of close could be different in subclasses.
      */
     abstract public void close();
+
+    public void addLineAtCurrentPosition(String text) {
+        waitForSucceededWorkerState();
+        getWebEngine().executeScript("addTextAtCurrentPosition('" + text + "');");
+    }
     /**
      * wait for succeeded state of the load worker
      */

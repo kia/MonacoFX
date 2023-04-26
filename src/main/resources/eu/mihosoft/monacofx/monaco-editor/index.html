@@ -167,6 +167,16 @@
 
     });
 
+    function addTextAtCurrentPosition(text) {
+        let currentPosition = editorView.getPosition();
+        let newEditOperation = {
+            range: new monaco.Range(currentPosition.lineNumber, currentPosition.column, currentPosition.lineNumber, currentPosition.column),
+            text: text
+        };
+        editorView.getModel().pushEditOperations([], [newEditOperation], null);
+        editorView.setPosition(new monaco.Position(currentPosition.lineNumber, currentPosition.column + text.length));
+    }
+
     function closeFindAction() {
         const domNode = editorView._overlayWidgets["editor.contrib.findWidget"].widget._closeBtn._domNode;
         if(domNode) {
