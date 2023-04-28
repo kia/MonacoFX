@@ -133,38 +133,19 @@
         let lastVersion = initialVersion;
         editorView.onDidChangeModelContent(e => {
             const versionId = editorView.getModel().getAlternativeVersionId();
-            // undoing
             if (versionId < currentVersion) {
-                // REDO AVAILABLE
-                // enableRedoButton();
-
-                // no more undo possible
                 if (versionId === initialVersion) {
-                    // UNDO NOT AVAILABLE
-                    // disableUndoButton();
                 }
             } else {
-                // redoing
                 if (versionId <= lastVersion) {
-                    // redoing the last change
-                    if (versionId == lastVersion) {
-                        // REDO NOT AVAILABLE
-                        // disableRedoButton();
-                    }
-                } else { // adding new change, disable redo when adding new changes
-                    // REDO NOT AVAILABLE
-                    // disableRedoButton();
+                } else {
                     if (currentVersion > lastVersion) {
                         lastVersion = currentVersion;
                     }
                 }
-
-                // UNDO AVAILABLE
-                // enableUndoButton();
             }
             currentVersion = versionId;
         });
-
     });
 
     function addTextAtCurrentPosition(text) {
@@ -178,17 +159,28 @@
     }
 
     function closeFindAction() {
-        const domNode = editorView._overlayWidgets["editor.contrib.findWidget"].widget._closeBtn._domNode;
-        if(domNode) {
-            domNode.click();
+        if (editorView &&
+            editorView._overlayWidgets &&
+            editorView._overlayWidgets["editor.contrib.findWidget"] &&
+            editorView._overlayWidgets["editor.contrib.findWidget"].widget &&
+            editorView._overlayWidgets["editor.contrib.findWidget"].widget._closeBtn ) {
+            const domNode = editorView._overlayWidgets["editor.contrib.findWidget"].widget._closeBtn._domNode;
+            if (domNode) {
+                domNode.click();
+            }
         }
     }
 
     function withSearchTerm(searchTerm) {
         const model = editorView.getModel();
-        const range = model.findMatches(searchTerm)[0].range;
-        editorView.setSelection(range);
-        editorView.getAction('actions.find').run();
+        if (model &&
+            model.findMatches(searchTerm) &&
+            model.findMatches(searchTerm)[0] &&
+            model.findMatches(searchTerm)[0].range) {
+            const range = model.findMatches(searchTerm)[0].range;
+            editorView.setSelection(range);
+            editorView.getAction('actions.find').run();
+        }
     }
 
     function isFindWidgetOpen() {
