@@ -48,6 +48,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -125,6 +126,10 @@ public abstract class MonacoFX extends Region {
      */
     abstract public void close();
 
+    public int getScrollHeight() {
+        return (int) executeJavaScriptLambda(null, param -> getWebEngine().executeScript("editorView.getScrollHeight()"));
+    }
+
     public void addLineAtCurrentPosition(String text) {
         waitForSucceededWorkerState();
         getWebEngine().executeScript("addTextAtCurrentPosition('" + text + "');");
@@ -153,20 +158,16 @@ public abstract class MonacoFX extends Region {
     }
 
     private void closeFindWidget() {
-        executeJavaScriptLambda(null, param -> {
-            getWebEngine().executeScript("closeFindAction();");
-            return null;
-        });
+        executeJavaScriptLambda(null, param -> getWebEngine().executeScript("closeFindAction();"));
     }
 
     public void resetScrollPosition() {
         executeJavaScriptLambda(null, param -> {
             super.requestFocus();
-            getWebEngine().executeScript(
+            return getWebEngine().executeScript(
                     "editorView.setScrollPosition({scrollTop: 0});\n" +
                     "editorView.setPosition({column: 1, lineNumber: 1});"
             );
-            return null;
         });
     }
 
@@ -195,8 +196,7 @@ public abstract class MonacoFX extends Region {
     public void requestFocus() {
         executeJavaScriptLambda(null, param -> {
             super.requestFocus();
-            getWebEngine().executeScript("setTimeout(() => {  editorView.focus();}, 1200);");
-            return null;
+            return getWebEngine().executeScript("setTimeout(() => {  editorView.focus();}, 1200);");
         });
     }
 
@@ -247,10 +247,7 @@ public abstract class MonacoFX extends Region {
 
     public void removeContextMenuActionById(String actionId) {
         String script = String.format("removeAction('%s');", actionId);
-        executeJavaScriptLambda("", param -> {
-            getWebEngine().executeScript(script);
-            return null;
-        });
+        executeJavaScriptLambda("", param -> getWebEngine().executeScript(script));
     }
     public void removeContextMenuAction(AbstractEditorAction action) {
         if (addedActions.contains(action)) {
@@ -281,10 +278,7 @@ public abstract class MonacoFX extends Region {
 
     public void setOption(String optionName, Object value) {
         String script = String.format("editorView.updateOptions({ " + optionName + ": %s })", value);
-        executeJavaScriptLambda(script, param -> {
-            getWebEngine().executeScript(script);
-            return null;
-        });
+        executeJavaScriptLambda(script, param -> getWebEngine().executeScript(script));
     }
 
     private void doAddContextMenuAction(AbstractEditorAction action) {
@@ -322,10 +316,11 @@ public abstract class MonacoFX extends Region {
 
     }
 
-    private void executeJavaScriptLambda(Object parameter , Callback<Object, Void> callback) {
+    private Object executeJavaScriptLambda(Object parameter , Callback<Object, Object> callback) {
         ReadOnlyObjectProperty<Worker.State> stateProperty = getWebEngine().getLoadWorker().stateProperty();
+        AtomicReference<Object> returnObject = new AtomicReference<>(null);
         if (Worker.State.SUCCEEDED == stateProperty.getValue()) {
-            callback.call(parameter);
+            returnObject.set(callback.call(parameter));
         } else {
             waitForSucceededWorkerState();
             AtomicBoolean jsDone = new AtomicBoolean(false);
@@ -337,7 +332,7 @@ public abstract class MonacoFX extends Region {
                         JSObject window = (JSObject) engine.executeScript("window");
                         Object jsEditorObj = window.call("getEditorView");
                         if (jsEditorObj instanceof JSObject) {
-                            callback.call(parameter);
+                            returnObject.set(callback.call(parameter));
                             jsDone.set(true);
                         }
                     });
@@ -356,7 +351,7 @@ public abstract class MonacoFX extends Region {
                 }
             });
             thread.start();
-
         }
+        return returnObject.get();
     }
 }
