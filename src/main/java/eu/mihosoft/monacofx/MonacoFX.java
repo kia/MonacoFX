@@ -57,13 +57,13 @@ public abstract class MonacoFX extends Region {
 
     private static final Logger LOGGER = Logger.getLogger(MonacoFX.class.getName());
 
-    private final WebView view;
-    private final WebEngine engine;
+    private WebView view;
+    private WebEngine engine;
 
     private final static String EDITOR_HTML_RESOURCE_LOCATION = "/eu/mihosoft/monacofx/monaco-editor/index.html";
 
-    private final Editor editor;
-    private final SystemClipboardWrapper systemClipboardWrapper;
+    private Editor editor;
+    private SystemClipboardWrapper systemClipboardWrapper;
     private boolean readOnly;
 
     private Worker.State workerState;
@@ -71,6 +71,13 @@ public abstract class MonacoFX extends Region {
     private Set<AbstractEditorAction> addedActions;
 
     public MonacoFX() {
+        if (Platform.isFxApplicationThread()) {
+            init();
+        } else {
+            Platform.runLater(this::init);
+        }
+    }
+    public void init() {
         view = new WebView();
         addedActions = Collections.synchronizedSet(new HashSet<>());
         getChildren().add(view);
@@ -150,6 +157,20 @@ public abstract class MonacoFX extends Region {
         oneSecondWonder.play();
     }
 
+    private void runScriptAfterSucceededWorkerState(String script) {
+        Timeline oneSecondWonder = new Timeline();
+        EventHandler<ActionEvent> actionEventEventHandler = (ActionEvent event) -> {
+            if (Worker.State.SUCCEEDED == workerState) {
+                oneSecondWonder.stop();
+                getWebEngine().executeScript(script);
+            }
+        };
+        KeyFrame keyFrame = new KeyFrame(Duration.seconds(1), actionEventEventHandler);
+        oneSecondWonder.getKeyFrames().setAll(keyFrame);
+        oneSecondWonder.setCycleCount(15);
+        oneSecondWonder.play();
+    }
+
     /**
      * clean up on close.
      */
@@ -172,8 +193,7 @@ public abstract class MonacoFX extends Region {
     }
 
     public void openWithSearchTerm(String searchTerm) {
-        waitForSucceededWorkerState();
-        getWebEngine().executeScript(String.format("withSearchTerm('%s')", searchTerm));
+        runScriptAfterSucceededWorkerState(String.format("withSearchTerm('%s')", searchTerm));
     }
 
     public void reload() {

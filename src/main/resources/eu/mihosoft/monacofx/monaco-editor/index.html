@@ -172,14 +172,13 @@
     }
 
     function withSearchTerm(searchTerm) {
-        const model = editorView.getModel();
-        if (model &&
-            model.findMatches(searchTerm) &&
-            model.findMatches(searchTerm)[0] &&
-            model.findMatches(searchTerm)[0].range) {
-            const range = model.findMatches(searchTerm)[0].range;
+        let model = editorView.getModel();
+        let action = editorView.getAction('actions.find');
+        let findMatch = model.findMatches(searchTerm)[0];
+        if (action && findMatch) {
+            const range = findMatch.range;
             editorView.setSelection(range);
-            editorView.getAction('actions.find').run();
+            action.run();
         }
     }
 
