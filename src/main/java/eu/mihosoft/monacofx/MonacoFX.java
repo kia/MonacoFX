@@ -45,6 +45,7 @@ import netscape.javascript.JSObject;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,15 +72,11 @@ public abstract class MonacoFX extends Region {
     private Set<AbstractEditorAction> addedActions;
 
     public MonacoFX() {
-        if (Platform.isFxApplicationThread()) {
-            init();
-        } else {
-            Platform.runLater(this::init);
-        }
+        addedActions = Collections.synchronizedSet(new HashSet<>());
     }
+
     public void init() {
         view = new WebView();
-        addedActions = Collections.synchronizedSet(new HashSet<>());
         getChildren().add(view);
         engine = view.getEngine();
         String url = getClass().getResource(EDITOR_HTML_RESOURCE_LOCATION).toExternalForm();
