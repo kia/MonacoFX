@@ -334,9 +334,9 @@ public abstract class MonacoFX extends Region {
     }
 
     private Object executeJavaScriptLambda(Object parameter , Callback<Object, Object> callback) {
-        ReadOnlyObjectProperty<Worker.State> stateProperty = getWebEngine().getLoadWorker().stateProperty();
+        ReadOnlyObjectProperty<Worker.State> stateProperty = getStateProperty();
         AtomicReference<Object> returnObject = new AtomicReference<>(null);
-        if (Worker.State.SUCCEEDED == stateProperty.getValue()) {
+        if (stateProperty != null && Worker.State.SUCCEEDED == stateProperty.getValue()) {
             returnObject.set(callback.call(parameter));
         } else {
             waitForSucceededWorkerState();
@@ -370,5 +370,12 @@ public abstract class MonacoFX extends Region {
             thread.start();
         }
         return returnObject.get();
+    }
+    private ReadOnlyObjectProperty<Worker.State> getStateProperty() {
+        if (engine != null) {
+            return engine.getLoadWorker().stateProperty();
+        } else {
+            return null;
+        }
     }
 }

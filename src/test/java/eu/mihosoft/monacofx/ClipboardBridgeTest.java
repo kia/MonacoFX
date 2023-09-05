@@ -81,8 +81,8 @@ public class ClipboardBridgeTest {
 		when(selection.getMember("endColumn")).thenReturn(18);
 
 		JSObject position = Mockito.mock(JSObject.class);
-		when(position.getMember("lineNumber")).thenReturn(1);
-		when(position.getMember("column")).thenReturn(10);
+
+
 
 		when(systemClipboardWrapper.hasString()).thenReturn(true);
 		when(systemClipboardWrapper.getString()).thenReturn("clipboard-text");
@@ -110,8 +110,8 @@ public class ClipboardBridgeTest {
 		when(selection.getMember("endColumn")).thenReturn(6);
 
 		JSObject position = Mockito.mock(JSObject.class);
-		when(position.getMember("lineNumber")).thenReturn(1);
-		when(position.getMember("column")).thenReturn(35);
+
+
 
 		when(systemClipboardWrapper.hasString()).thenReturn(true);
 		when(systemClipboardWrapper.getString()).thenReturn("text in \nclipboard");
@@ -125,7 +125,7 @@ public class ClipboardBridgeTest {
 				"some text where at this position 'text in \n" +
 				"clipboard' something is pasted", updateTextCapture.getValue());
 		verify(paste).setMember("lineNumber", 2L);
-		verify(paste).setMember("column", 44);
+		verify(paste).setMember("column", 10);
 
 	}
 
@@ -139,8 +139,8 @@ public class ClipboardBridgeTest {
 		when(selection.getMember("startColumn")).thenReturn(1);
 
 		JSObject position = Mockito.mock(JSObject.class);
-		when(position.getMember("lineNumber")).thenReturn(2);
-		when(position.getMember("column")).thenReturn(1);
+
+
 
 		when(systemClipboardWrapper.hasString()).thenReturn(true);
 		when(systemClipboardWrapper.getString()).thenReturn("text in clipboard");

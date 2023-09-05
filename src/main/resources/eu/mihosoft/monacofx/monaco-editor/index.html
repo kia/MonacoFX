@@ -189,12 +189,99 @@
         }
     }
 
-    function isFindWidgetOpen() {
-        const domNode = editorView._overlayWidgets["editor.contrib.findWidget"].widget._domNode;
+    function paste(editor) {
+        let activeFindTextArea = activeTextAreaInFindWidget(editorView);
+        console.log("activeFindTextArea: " + activeFindTextArea.value)
+        if (!activeFindTextArea) {
+            let position = editor.getPosition();
+            let newPosition = clipboardBridge.paste(editor.getSelection(), position);
+            editor.setPosition(newPosition);
+            editor.focus();
+        } else {
+            let updateString = clipboardBridge.getContent();
+            replaceSelectedText(activeFindTextArea, updateString);
+            activeFindTextArea.dispatchEvent(new Event('input', { 'bubbles': true }));
+        }
+    }
+
+    function getInputSelection(el) {
+        let start = 0, end = 0, normalizedValue, range,
+            textInputRange, len, endRange;
+
+        if (typeof el.selectionStart == "number" && typeof el.selectionEnd == "number") {
+            start = el.selectionStart;
+            end = el.selectionEnd;
+        } else {
+            range = document.selection.createRange();
+
+            if (range && range.parentElement() === el) {
+                len = el.value.length;
+                normalizedValue = el.value.replace(/\r\n/g, "\n");
+
+                // Create a working TextRange that lives only in the input
+                textInputRange = el.createTextRange();
+                textInputRange.moveToBookmark(range.getBookmark());
+
+                // Check if the start and end of the selection are at the very end
+                // of the input, since moveStart/moveEnd doesn't return what we want
+                // in those cases
+                endRange = el.createTextRange();
+                endRange.collapse(false);
+
+                if (textInputRange.compareEndPoints("StartToEnd", endRange) > -1) {
+                    start = end = len;
+                } else {
+                    start = -textInputRange.moveStart("character", -len);
+                    start += normalizedValue.slice(0, start).split("\n").length - 1;
+
+                    if (textInputRange.compareEndPoints("EndToEnd", endRange) > -1) {
+                        end = len;
+                    } else {
+                        end = -textInputRange.moveEnd("character", -len);
+                        end += normalizedValue.slice(0, end).split("\n").length - 1;
+                    }
+                }
+            }
+        }
+
+        return {
+            start: start,
+            end: end
+        };
+    }
+
+    function replaceSelectedText(el, text) {
+        let sel = getInputSelection(el), val = el.value;
+        el.value = val.slice(0, sel.start) + text + val.slice(sel.end);
+    }
+    function activeTextAreaInFindWidget(editor) {
+        if(isFindWidgetOpen(editor)) {
+            const domNode = editorView._overlayWidgets["editor.contrib.findWidget"].widget._domNode;
+            let findTextArea = domNode.getElementsByTagName("textarea")[0];
+            let replaceTextArea = domNode.getElementsByTagName("textarea")[1];
+            if (document.activeElement === findTextArea) {
+                return findTextArea
+            }
+            if (document.activeElement === replaceTextArea) {
+                return replaceTextArea
+            }
+        }
+        return null;
+    }
+    function isFindWidgetOpen(editor) {
+        let overlayWidget = editor._overlayWidgets["editor.contrib.findWidget"];
+        if (!overlayWidget) {
+            return false;
+        }
+        let widget = overlayWidget.widget;
+        if (!widget) {
+            return false;
+        }
+        const domNode = widget._domNode;
         if(!domNode || !domNode.children[0]) {
             return false;
         }
-        let opened = domNode.children[0].style.display != "none";
+        let opened = (domNode.children[0].getAttribute('aria-disabled') === "false")
         return opened;
     }
 

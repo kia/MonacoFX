@@ -93,6 +93,15 @@ public class ClipboardBridge {
 		return position;
 	}
 
+	public String addPasteString(int selectionEnd, String originText) {
+		String changedText = "";
+		if (systemClipboardWrapper.hasString()) {
+			String pasteString = systemClipboardWrapper.getString();
+			changedText = addPasteString(0, selectionEnd, pasteString, originText);
+		}
+		return changedText;
+	}
+
 	protected String removeSelection(JSObject jsSelection, String originText) {
 		int startLineNumber = getNumber(jsSelection, "startLineNumber");
 		int startColumn = getNumber(jsSelection, "startColumn");
@@ -126,11 +135,9 @@ public class ClipboardBridge {
 		}
 	}
 
-	private String addPasteString(JSObject jsSelection, String pasteString, String originText) {
+	private String addPasteString(int startLineNumber, int startColumn, String pasteString, String originText) {
 		// https://stackoverflow.com/questions/14602062/java-string-split-removed-empty-values
 		String[] lines = originText.split("\n", -1);
-		int startLineNumber = getNumber(jsSelection, "startLineNumber") - 1;
-		int startColumn = getNumber(jsSelection, "startColumn") - 1;
 		if (startLineNumber < lines.length) {
 			String beforeMousePosition = lines[startLineNumber].substring(0, startColumn);
 			String afterMousePosition = lines[startLineNumber].substring(startColumn);
@@ -141,6 +148,12 @@ public class ClipboardBridge {
 			lines = list.toArray(new String[0]);
 		}
 		return String.join("\n", lines);
+	}
+
+	private String addPasteString(JSObject jsSelection, String pasteString, String originText) {
+		int startLineNumber = getNumber(jsSelection, "startLineNumber") - 1;
+		int startColumn = getNumber(jsSelection, "startColumn") - 1;
+		return addPasteString(startLineNumber, startColumn, pasteString, originText);
 	}
 
 	private void calcNewCursorPosition(JSObject selection, JSObject position, String string) {
@@ -167,5 +180,9 @@ public class ClipboardBridge {
 			number = ((Double) selectionMember).intValue();
 		}
 		return number;
+	}
+
+	public String getContent() {
+		return systemClipboardWrapper.getString();
 	}
 }
