@@ -53,7 +53,7 @@
 <div id="container"></div>
 <script src="./package/min/vs/ResizeObserver.js"></script>
 <script src="./package/min/vs/loader.js"></script>
-
+<!--<script src='./package/min/vs/firebug-lite.js'></script>-->
 <script>
     var editorCreatedCallback;
     var editorView;
@@ -268,20 +268,7 @@
         return null;
     }
     function isFindWidgetOpen(editor) {
-        let overlayWidget = editor._overlayWidgets["editor.contrib.findWidget"];
-        if (!overlayWidget) {
-            return false;
-        }
-        let widget = overlayWidget.widget;
-        if (!widget) {
-            return false;
-        }
-        const domNode = widget._domNode;
-        if(!domNode || !domNode.children[0]) {
-            return false;
-        }
-        let opened = (domNode.children[0].getAttribute('aria-disabled') === "false")
-        return opened;
+        return editor.getContribution('editor.contrib.findController')._widget._isVisible
     }
 
     function isQuickAccessOpen() {
