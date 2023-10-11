@@ -34,6 +34,7 @@ jar {
     }
     processResources.exclude(
             "eu/mihosoft/monacofx/monaco-editor/package/dev",
+            "eu/mihosoft/monacofx/monaco-editor/package/min/vs/firebug-lite.js",
             "eu/mihosoft/monacofx/monaco-editor/package/esm/**",
             "eu/mihosoft/monacofx/monaco-editor/package/node_modules")
 
