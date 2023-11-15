@@ -297,7 +297,9 @@ public abstract class MonacoFX extends Region {
     }
 
     private Object executeJavaScript(String script) {
-        LOGGER.log(Level.INFO, "executing javascript code: " + script);
+        if (Boolean.parseBoolean(System.getProperty("javascript.log"))) {
+            LOGGER.log(Level.INFO, "executing javascript code: " + script);
+        }
         return engine.executeScript(script);
     }
 
