@@ -287,12 +287,8 @@ public abstract class MonacoFX extends Region {
         return readOnly;
     }
     public void setReadonly(boolean readOnly) {
-        LOGGER.log(Level.INFO, "set readOnly = " + readOnly);
         String setReadonlyScript = "setReadonly(" + readOnly + ")";
         executeJavaScriptLambda(setReadonlyScript, param -> executeJavaScript(setReadonlyScript));
-        String isReadonlyScript = "isReadonly()";
-        Object changedReadonlyFlag = executeJavaScriptLambda(setReadonlyScript, param -> executeJavaScript(isReadonlyScript));
-        LOGGER.log(Level.INFO, "changed readOnly = " + changedReadonlyFlag);
         this.readOnly = readOnly;
     }
 

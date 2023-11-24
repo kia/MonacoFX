@@ -55,7 +55,7 @@ public class ClipboardBridge {
 		int endLineNumber = getNumber(jsSelection, "endLineNumber") - 1;
 		int endColumn = getNumber(jsSelection, "endColumn") - 1;
 		String originText = document.getText();
-		String[] lines = originText.split("\n", -1);
+		String[] lines = splitToLines(originText);
 		StringBuilder copyText = new StringBuilder();
 		if (startLineNumber == endLineNumber) {
 			copyText = new StringBuilder(lines[startLineNumber].substring(startColumn, endColumn));
@@ -108,7 +108,7 @@ public class ClipboardBridge {
 		int endLineNumber = getNumber(jsSelection, "endLineNumber");
 		int endColumn = getNumber(jsSelection, "endColumn");
 		if (startLineNumber < endLineNumber || (startLineNumber == endLineNumber && startColumn < endColumn)) {
-			String[] lines = originText.split("\n", -1);
+			String[] lines = splitToLines(originText);
 			AtomicInteger count = new AtomicInteger(0);
 			AtomicInteger startPosition = new AtomicInteger(0);
 			AtomicInteger endPosition = new AtomicInteger(0);
@@ -137,7 +137,7 @@ public class ClipboardBridge {
 
 	private String addPasteString(int startLineNumber, int startColumn, String pasteString, String originText) {
 		// https://stackoverflow.com/questions/14602062/java-string-split-removed-empty-values
-		String[] lines = originText.split("\n", -1);
+		String[] lines = splitToLines(originText);
 		if (startLineNumber < lines.length) {
 			String beforeMousePosition = lines[startLineNumber].substring(0, startColumn);
 			String afterMousePosition = lines[startLineNumber].substring(startColumn);
@@ -159,7 +159,7 @@ public class ClipboardBridge {
 	private void calcNewCursorPosition(JSObject selection, JSObject position, String string) {
 		int lineNumber = getNumber(selection, "startLineNumber");
 		int column = getNumber(selection, "startColumn");
-		String[] split = string.split("\n", -1);
+		String[] split = splitToLines(string);
 		long count = split.length - 1;
 		position.setMember("lineNumber", lineNumber + count);
 
@@ -185,4 +185,12 @@ public class ClipboardBridge {
 	public String getContent() {
 		return systemClipboardWrapper.getString();
 	}
+
+	private String[] splitToLines(String originText) {
+		if (originText == null) {
+			originText = "";
+		}
+		return originText.split("\n", -1);
+	}
+
 }
