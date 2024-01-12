@@ -193,4 +193,5 @@ public class ClipboardBridge {
 		return originText.split("\n", -1);
 	}
 
+	
 }

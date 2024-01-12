@@ -16,4 +16,9 @@ public class SingleThreadTaskExecutor implements TaskExecutor {
     public void shutdown() {
         executorService.shutdown();
     }
+
+    @Override
+    public void addInitTask(Runnable initCallback) {
+
+    }
 }

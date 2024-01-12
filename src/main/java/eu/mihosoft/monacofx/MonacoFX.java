@@ -25,6 +25,8 @@ package eu.mihosoft.monacofx;
 
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.geometry.HPos;
 import javafx.geometry.VPos;
@@ -39,8 +41,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,6 +48,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+/**
+ * This class, in the first place, is responsible for loading and initializing the monaco editor by performing
+ * JavaScript code in JavaFX WebView.
+ * It provides also some convenience method for changing the status of the editor bz applying JavaScript functions.
+ * The Bridge between
+ */
 public abstract class MonacoFX extends Region {
 
     private static final Logger LOGGER = Logger.getLogger(MonacoFX.class.getName());
@@ -58,13 +64,14 @@ public abstract class MonacoFX extends Region {
     private final static String EDITOR_HTML_RESOURCE_LOCATION = "/eu/mihosoft/monacofx/monaco-editor/index.html";
 
     private Editor editor;
-    private SystemClipboardWrapper systemClipboardWrapper;
 
     private boolean readOnly;
 
     private Set<AbstractEditorAction> addedActions;
 
-    private final TaskExecutor javaScriptTaskExecutor = new SingleThreadTaskExecutor();
+    private final TaskExecutor javaScriptTaskExecutor = new SynchronizedTaskExecutor();
+    private volatile boolean initDone = false;
+
 
     public MonacoFX() {
         addedActions = Collections.synchronizedSet(new HashSet<>());
@@ -78,11 +85,11 @@ public abstract class MonacoFX extends Region {
 
         editor = new Editor(engine);
 
-        systemClipboardWrapper = new SystemClipboardWrapper();
-        ClipboardBridge clipboardBridge = new ClipboardBridge(getEditor().getDocument(), systemClipboardWrapper);
+        ClipboardBridge clipboardBridge = new ClipboardBridge(getEditor().getDocument(), new SystemClipboardWrapper());
         AtomicBoolean jsDone = new AtomicBoolean(false);
         AtomicInteger attempts = new AtomicInteger();
         Runnable initCallback = () -> {
+            System.err.println("runLater init startet " + this);
             long startTime = System.currentTimeMillis();
             while (!jsDone.get()) {
                 if (!jsDone.get()) {
@@ -100,21 +107,33 @@ public abstract class MonacoFX extends Region {
                     Object jsEditorObj = window.call("getEditorView");
                     if (jsEditorObj instanceof JSObject) {
                         editor.setEditor(window, (JSObject) jsEditorObj);
-                        jsDone.set(true);
+                        Object jsClipboardObj = window.call("getClipboardBridge");
+                        System.out.println("jsClipboardObj = " + jsClipboardObj);
+                        if (jsClipboardObj instanceof ClipboardBridge) {
+                            jsDone.set(true);
+                            initDone = true;
+                        }
                     }
                 });
 
-                if (attempts.getAndIncrement() > 10) {
+                if (attempts.getAndIncrement() > 30) {
                     String msg = "Cannot initialize editor (JS execution not complete). Max number of attempts reached.";
                     LOGGER.log(Level.SEVERE, msg);
+                    System.err.println(msg);
                     throw new RuntimeException(msg);
                 }
             }
             long endTime = System.currentTimeMillis();
             log("consumed time executing javascript code for init: " + (endTime - startTime));
+            System.err.println("runLater init finished " + this + " initDone: " + initDone);
         };
 
-        javaScriptTaskExecutor.addTask(initCallback);
+        engine.getLoadWorker().stateProperty().addListener((observableValue, state, newState) -> {
+            if (Worker.State.SUCCEEDED == newState) {
+                javaScriptTaskExecutor.addInitTask(initCallback);
+            }
+        });
+
         engine.load(url);
 
     }
@@ -123,6 +142,10 @@ public abstract class MonacoFX extends Region {
      * implementation of close could be different in subclasses.
      */
     abstract public void close();
+
+    public boolean isInitDone() {
+        return initDone;
+    }
 
     public void shutdown() {
         javaScriptTaskExecutor.shutdown();
@@ -137,8 +160,8 @@ public abstract class MonacoFX extends Region {
     }
     @Override
     public void requestFocus() {
+        super.requestFocus();
         executeJavaScriptLambda(null, param -> {
-            super.requestFocus();
             return executeJavaScript("editorView.focus();");
         });
     }
@@ -280,13 +303,15 @@ public abstract class MonacoFX extends Region {
             javaScriptTaskExecutor.addTask(new Runnable() {
                 @Override
                 public void run() {
-                    System.out.println("task = " + this);
+                    System.err.println("1 - task = " + this + " " + MonacoFX.this);
 
                     Platform.runLater(() -> {
+                        System.err.println("2 - runLater startet " + this + " " + MonacoFX.this);
                         long startTime = System.currentTimeMillis();
                         returnObject.set(callback.call(parameter));
                         long stopTime = System.currentTimeMillis();
                         MonacoFX.this.log("consumed time for executing javascript code: " + (stopTime - startTime));
+                        System.err.println("3 - runLater ended " + this + " " + MonacoFX.this);
                     });
                 }
             });
