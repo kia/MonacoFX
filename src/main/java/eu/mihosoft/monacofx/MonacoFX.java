@@ -71,6 +71,7 @@ public abstract class MonacoFX extends Region {
 
     private final TaskExecutor javaScriptTaskExecutor = new SynchronizedTaskExecutor();
     private volatile boolean initDone = false;
+    private JSObject window;
 
 
     public MonacoFX() {
@@ -88,7 +89,7 @@ public abstract class MonacoFX extends Region {
         ClipboardBridge clipboardBridge = new ClipboardBridge(getEditor().getDocument(), new SystemClipboardWrapper());
         AtomicBoolean jsDone = new AtomicBoolean(false);
         AtomicInteger attempts = new AtomicInteger();
-        Runnable initCallback = () -> {
+        Runnable loadEditorViewCallback = () -> {
             System.err.println("runLater init startet " + this);
             long startTime = System.currentTimeMillis();
             while (!jsDone.get()) {
@@ -101,36 +102,33 @@ public abstract class MonacoFX extends Region {
                 }
                 // check if JS execution is done.
                 Platform.runLater(() -> {
-                    JSObject window = (JSObject) engine.executeScript("window");
-                    window.setMember("clipboardBridge", clipboardBridge);
-                    window.setMember("javaBridge", this);
                     Object jsEditorObj = window.call("getEditorView");
                     if (jsEditorObj instanceof JSObject) {
                         editor.setEditor(window, (JSObject) jsEditorObj);
-                        Object jsClipboardObj = window.call("getClipboardBridge");
-                        System.out.println("jsClipboardObj = " + jsClipboardObj);
-                        if (jsClipboardObj instanceof ClipboardBridge) {
-                            jsDone.set(true);
-                            initDone = true;
-                        }
+                        jsDone.set(true);
+                        initDone = true;
                     }
                 });
 
                 if (attempts.getAndIncrement() > 30) {
                     String msg = "Cannot initialize editor (JS execution not complete). Max number of attempts reached.";
                     LOGGER.log(Level.SEVERE, msg);
-                    System.err.println(msg);
                     throw new RuntimeException(msg);
                 }
             }
             long endTime = System.currentTimeMillis();
             log("consumed time executing javascript code for init: " + (endTime - startTime));
-            System.err.println("runLater init finished " + this + " initDone: " + initDone);
         };
+
+        javaScriptTaskExecutor.addTask(loadEditorViewCallback);
 
         engine.getLoadWorker().stateProperty().addListener((observableValue, state, newState) -> {
             if (Worker.State.SUCCEEDED == newState) {
-                javaScriptTaskExecutor.addInitTask(initCallback);
+                window = (JSObject) engine.executeScript("window");
+                window.setMember("clipboardBridge", clipboardBridge);
+                window.setMember("javaBridge", this);
+
+                javaScriptTaskExecutor.start();
             }
         });
 
@@ -161,9 +159,7 @@ public abstract class MonacoFX extends Region {
     @Override
     public void requestFocus() {
         super.requestFocus();
-        executeJavaScriptLambda(null, param -> {
-            return executeJavaScript("editorView.focus();");
-        });
+        executeJavaScriptLambda(null, param -> executeJavaScript("editorView.focus();"));
     }
 
     @Override protected double computePrefWidth(double height) {
@@ -296,33 +292,8 @@ public abstract class MonacoFX extends Region {
     }
     private Object executeJavaScriptLambda(Object parameter , Callback<Object, Object> callback) {
         AtomicReference<Object> returnObject = new AtomicReference<>(null);
-        ReadOnlyObjectProperty<Worker.State> stateProperty = getStateProperty();
-        if (stateProperty != null && Worker.State.SUCCEEDED == stateProperty.getValue()) {
-            returnObject.set(callback.call(parameter));
-        } else {
-            javaScriptTaskExecutor.addTask(new Runnable() {
-                @Override
-                public void run() {
-                    System.err.println("1 - task = " + this + " " + MonacoFX.this);
-
-                    Platform.runLater(() -> {
-                        System.err.println("2 - runLater startet " + this + " " + MonacoFX.this);
-                        long startTime = System.currentTimeMillis();
-                        returnObject.set(callback.call(parameter));
-                        long stopTime = System.currentTimeMillis();
-                        MonacoFX.this.log("consumed time for executing javascript code: " + (stopTime - startTime));
-                        System.err.println("3 - runLater ended " + this + " " + MonacoFX.this);
-                    });
-                }
-            });
-        }
+        javaScriptTaskExecutor.addTask(() -> Platform.runLater(() -> returnObject.set(callback.call(parameter))));
         return returnObject.get();
     }
-    private ReadOnlyObjectProperty<Worker.State> getStateProperty() {
-        if (engine != null) {
-            return engine.getLoadWorker().stateProperty();
-        } else {
-            return null;
-        }
-    }
+
 }

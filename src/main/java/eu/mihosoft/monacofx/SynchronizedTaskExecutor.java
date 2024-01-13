@@ -4,7 +4,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SynchronizedTaskExecutor implements TaskExecutor {
-    private final LinkedBlockingDeque<Task> linkedBlockingQueue =  new LinkedBlockingDeque<>();
+    private final LinkedBlockingDeque<Runnable> linkedBlockingQueue =  new LinkedBlockingDeque<>();
     private final AtomicBoolean shutDownRequested = new AtomicBoolean(false);
     private final Object lock = new Object();
     private volatile boolean initialized = false;
@@ -12,7 +12,7 @@ public class SynchronizedTaskExecutor implements TaskExecutor {
     public SynchronizedTaskExecutor() {
         Thread thread = new Thread(() -> {
             while (!shutDownRequested.get()) {
-                Task task;
+                Runnable task = null;
                 synchronized (lock) {
                     // Wait until there's a task to process
                     while (linkedBlockingQueue.isEmpty()) {
@@ -23,26 +23,13 @@ public class SynchronizedTaskExecutor implements TaskExecutor {
                             e.printStackTrace();
                         }
                     }
-                    // check the first element in the queue. if it is an initializer then continue
                     if (initialized) {
                         task = linkedBlockingQueue.poll();
-                    } else {
-                        task = linkedBlockingQueue.getFirst();
-                        if (task.isInitializer()) {
-                            task = linkedBlockingQueue.removeFirst();
-                            initialized = true;
-                        }
                     }
                 }
-                if (initialized && task != null) {
-                    if (task.isInitializer()) {
-                        System.out.println("run isInitializer task = " + task + " " + this);
-                    } else {
-                        System.out.println("run task = " + task + " " + this);
-                    }
-                    task.getRunnable().run();
+                if(task != null) {
+                    task.run();
                 }
-
             }
         });
         thread.start();
@@ -51,13 +38,15 @@ public class SynchronizedTaskExecutor implements TaskExecutor {
     public void addTask(Runnable runnable) {
         synchronized (lock) {
             // Add the task to the queue
-            Task task = new Task();
-            task.setRunnable(runnable);
-            task.setInit(false);
-            linkedBlockingQueue.add(task);
+            linkedBlockingQueue.add(runnable);
             // Notify the processing thread that there's a new task
             lock.notify();
         }
+    }
+
+    @Override
+    public void start() {
+        this.initialized = true;
     }
 
     @Override
@@ -65,18 +54,5 @@ public class SynchronizedTaskExecutor implements TaskExecutor {
         shutDownRequested.set(true);
     }
 
-    @Override
-    public void addInitTask(Runnable runnable) {
-
-        synchronized (lock) {
-            // Add the task to the queue
-            Task task = new Task();
-            task.setInit(true);
-            task.setRunnable(runnable);
-            linkedBlockingQueue.addFirst(task);
-            // Notify the processing thread that there's a new task
-            lock.notify();
-        }
-    }
 
 }
