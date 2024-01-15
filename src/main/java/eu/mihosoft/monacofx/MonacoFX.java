@@ -24,9 +24,6 @@
 package eu.mihosoft.monacofx;
 
 import javafx.application.Platform;
-import javafx.beans.property.ReadOnlyObjectProperty;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.geometry.HPos;
 import javafx.geometry.VPos;
@@ -34,7 +31,6 @@ import javafx.scene.layout.Region;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 import javafx.util.Callback;
-import netscape.javascript.JSException;
 import netscape.javascript.JSObject;
 
 import java.util.Arrays;
@@ -67,11 +63,9 @@ public abstract class MonacoFX extends Region {
 
     private boolean readOnly;
 
-    private Set<AbstractEditorAction> addedActions;
+    private final Set<AbstractEditorAction> addedActions;
 
-    private final TaskExecutor javaScriptTaskExecutor = new SynchronizedTaskExecutor();
-    private volatile boolean initDone = false;
-    private JSObject window;
+    private TaskExecutor javaScriptTaskExecutor = new SynchronizedTaskExecutor();
 
 
     public MonacoFX() {
@@ -87,26 +81,51 @@ public abstract class MonacoFX extends Region {
         editor = new Editor(engine);
 
         ClipboardBridge clipboardBridge = new ClipboardBridge(getEditor().getDocument(), new SystemClipboardWrapper());
+
+        Runnable loadEditorViewCallback = createInitCallback();
+
+        javaScriptTaskExecutor.addTask(loadEditorViewCallback);
+
+        engine.getLoadWorker().stateProperty().addListener((observableValue, state, newState) -> {
+            if (Worker.State.SUCCEEDED == newState) {
+                JSObject window = (JSObject) engine.executeScript("window");
+                window.setMember("clipboardBridge", clipboardBridge);
+                window.setMember("javaBridge", this);
+
+                javaScriptTaskExecutor.start();
+            }
+        });
+
+        engine.load(url);
+        view.focusedProperty().addListener((observableValue, aBoolean, focused) -> {
+            if (focused) {
+                submitJavaScript("focus();");
+            }
+        });
+
+    }
+
+    private Runnable createInitCallback() {
         AtomicBoolean jsDone = new AtomicBoolean(false);
         AtomicInteger attempts = new AtomicInteger();
-        Runnable loadEditorViewCallback = () -> {
-            System.err.println("runLater init startet " + this);
+        Runnable runnable = () -> {
             long startTime = System.currentTimeMillis();
             while (!jsDone.get()) {
                 if (!jsDone.get()) {
                     try {
                         Thread.sleep(500);
                     } catch (InterruptedException e) {
-                        e.printStackTrace();
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                        Thread.currentThread().interrupt();
                     }
                 }
                 // check if JS execution is done.
                 Platform.runLater(() -> {
+                    JSObject window = (JSObject) engine.executeScript("window");
                     Object jsEditorObj = window.call("getEditorView");
                     if (jsEditorObj instanceof JSObject) {
                         editor.setEditor(window, (JSObject) jsEditorObj);
                         jsDone.set(true);
-                        initDone = true;
                     }
                 });
 
@@ -119,21 +138,7 @@ public abstract class MonacoFX extends Region {
             long endTime = System.currentTimeMillis();
             log("consumed time executing javascript code for init: " + (endTime - startTime));
         };
-
-        javaScriptTaskExecutor.addTask(loadEditorViewCallback);
-
-        engine.getLoadWorker().stateProperty().addListener((observableValue, state, newState) -> {
-            if (Worker.State.SUCCEEDED == newState) {
-                window = (JSObject) engine.executeScript("window");
-                window.setMember("clipboardBridge", clipboardBridge);
-                window.setMember("javaBridge", this);
-
-                javaScriptTaskExecutor.start();
-            }
-        });
-
-        engine.load(url);
-
+        return runnable;
     }
 
     /**
@@ -141,25 +146,23 @@ public abstract class MonacoFX extends Region {
      */
     abstract public void close();
 
-    public boolean isInitDone() {
-        return initDone;
-    }
-
     public void shutdown() {
-        javaScriptTaskExecutor.shutdown();
+        if (javaScriptTaskExecutor != null) {
+            javaScriptTaskExecutor.shutdown();
+            javaScriptTaskExecutor = null;
+        }
     };
 
     public int getScrollHeight() {
-        return (int) executeJavaScriptLambda(null, param -> executeJavaScript("editorView.getScrollHeight()"));
+        return (int) submitJavaScript("editorView.getScrollHeight()");
     }
 
     public void addLineAtCurrentPosition(String text) {
-        executeJavaScriptLambda(null, param -> executeJavaScript("addTextAtCurrentPosition('" + text + "');"));
+        submitJavaScript("addTextAtCurrentPosition('" + text + "');");
     }
     @Override
     public void requestFocus() {
-        super.requestFocus();
-        executeJavaScriptLambda(null, param -> executeJavaScript("editorView.focus();"));
+        view.requestFocus();
     }
 
     @Override protected double computePrefWidth(double height) {
@@ -198,10 +201,15 @@ public abstract class MonacoFX extends Region {
      */
     public void addContextMenuAction(AbstractEditorAction action) {
         if (!readOnly || action.isVisibleOnReadonly() ) {
-            executeJavaScriptLambda(action, param -> {
+            submitJavaScript(o -> {
                 if (!addedActions.contains(action)) {
-                    String script = createAddContextMenuScript(action);
-                    executeJavaScript(script);
+                    JSObject window = (JSObject) executeJavaScript("window");
+                    if (window != null) {
+                        window.setMember(action.getName(), action);
+                        String script = createAddContextMenuScript(action);
+                        engine.executeScript(script);
+                        addedActions.add(action);
+                    }
                 }
                 return null;
             });
@@ -209,8 +217,7 @@ public abstract class MonacoFX extends Region {
     }
 
     public void removeContextMenuActionById(String actionId) {
-        String script = String.format("removeAction('%s');", actionId);
-        executeJavaScriptLambda("", param -> executeJavaScript(script));
+        submitJavaScript(String.format("removeAction('%s');", actionId));
     }
     public void removeContextMenuAction(AbstractEditorAction action) {
         if (addedActions.contains(action)) {
@@ -223,25 +230,35 @@ public abstract class MonacoFX extends Region {
         addedActions.forEach(this::removeActionObject);
         addedActions.clear();
     }
+    public boolean isReadOnly() {
+        return readOnly;
+    }
 
+    public void setReadonly(boolean readOnly) {
+        submitJavaScript(String.format("setReadonly(%s)", readOnly));
+        this.readOnly = readOnly;
+    }
+    public void setOption(String optionName, Object value) {
+        submitJavaScript(String.format("editorView.updateOptions({ %s: %s })", optionName, value));
+    }
+
+    public Object submitJavaScript(String script) {
+        return submitJavaScript(param -> executeJavaScript(script));
+    }
+
+    // PRIVATE METHODS
     private void removeActionObject(AbstractEditorAction action) {
         removeContextMenuActionById(action.getActionId());
         JSObject window = (JSObject) executeJavaScript("window");
         window.removeMember(action.getName());
     }
 
-    public boolean isReadOnly() {
-        return readOnly;
-    }
-    public void setReadonly(boolean readOnly) {
-        String setReadonlyScript = "setReadonly(" + readOnly + ")";
-        executeJavaScriptLambda(setReadonlyScript, param -> executeJavaScript(setReadonlyScript));
-        this.readOnly = readOnly;
-    }
-
     private Object executeJavaScript(String script) {
         log("executing javascript code: " + script);
-        return engine.executeScript(script);
+        if (script != null && !script.isEmpty()) {
+            return engine.executeScript(script);
+        }
+        return null;
     }
 
     private void log(String msg) {
@@ -250,49 +267,37 @@ public abstract class MonacoFX extends Region {
         }
     }
 
-    public void setOption(String optionName, Object value) {
-        String script = String.format("editorView.updateOptions({ %s: %s })", optionName, value);
-        executeJavaScriptLambda(script, param -> executeJavaScript(script));
-    }
 
     private String createAddContextMenuScript(AbstractEditorAction action) {
-        String script = "";
-        if (!addedActions.contains(action)) {
-            String precondition = "null";
-            if (!action.isVisibleOnReadonly() && readOnly) {
-                precondition = "\"false\"";
-            }
-            JSObject window = (JSObject) executeJavaScript("window");
-            String actionName = action.getName();
-            String keyBindings = Arrays.stream(action.getKeyBindings()).collect(Collectors.joining(","));
-            window.setMember(actionName, action);
-            String contextMenuOrder = "";
-            if (action.getContextMenuOrder() != null && !action.getContextMenuOrder().isEmpty()) {
-                contextMenuOrder = "contextMenuOrder: " + action.getContextMenuOrder() + ",\n";
-            }
-            try {
-                script = "editorView.addAction({\n" +
-                        "id: \"" + action.getActionId() + "\",\n" +
-                        "label: \"" + action.getLabel() + "\",\n" +
-                        "contextMenuGroupId: \"" + action.getContextMenuGroupId() + "\",\n" +
-                        "precondition: " + precondition + ",\n" +
-                        "keybindings: [" + keyBindings + "],\n" +
-                        contextMenuOrder +
-                        "run: (editor) => {" +
-                        actionName + ".action();\n" +
-                        action.getRunScript() +
-                        "}\n" +
-                        "});";
-                addedActions.add(action);
-            } catch (JSException exception) {
-                LOGGER.log(Level.SEVERE, exception.getMessage());
-            }
+
+        String precondition = "null";
+        if (!action.isVisibleOnReadonly() && readOnly) {
+            precondition = "\"false\"";
         }
+        String actionName = action.getName();
+        String keyBindings = Arrays.stream(action.getKeyBindings()).collect(Collectors.joining(","));
+        String contextMenuOrder = "";
+        if (action.getContextMenuOrder() != null && !action.getContextMenuOrder().isEmpty()) {
+            contextMenuOrder = "contextMenuOrder: " + action.getContextMenuOrder() + ",\n";
+        }
+
+        String script = "editorView.addAction({\n" +
+                "id: \"" + action.getActionId() + "\",\n" +
+                "label: \"" + action.getLabel() + "\",\n" +
+                "contextMenuGroupId: \"" + action.getContextMenuGroupId() + "\",\n" +
+                "precondition: " + precondition + ",\n" +
+                "keybindings: [" + keyBindings + "],\n" +
+                contextMenuOrder +
+                "run: (editor) => {" +
+                actionName + ".action();\n" +
+                action.getRunScript() +
+                "}\n" +
+                "});";
         return script;
     }
-    private Object executeJavaScriptLambda(Object parameter , Callback<Object, Object> callback) {
+    private Object submitJavaScript(Callback<Object, Object> callback) {
         AtomicReference<Object> returnObject = new AtomicReference<>(null);
-        javaScriptTaskExecutor.addTask(() -> Platform.runLater(() -> returnObject.set(callback.call(parameter))));
+        javaScriptTaskExecutor.addTask(() -> Platform.runLater(() -> returnObject.set(callback.call(null))));
         return returnObject.get();
     }
 

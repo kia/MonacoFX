@@ -78,6 +78,7 @@
 
         editorView = monaco.editor.create(document.getElementById('container'), {
             value: getCode(),
+            readOnly: true,
             automaticLayout: true,
             roundedSelection: false,
             mouseWheelScrollSensitivity: 0.1,
@@ -112,6 +113,12 @@
                 command: null,
             }
         ]);
+
+
+        const messageContribution = editorView.getContribution('editor.contrib.messageController');
+        const diposable = editorView.onDidAttemptReadOnlyEdit(() => {
+            messageContribution.showMessage('Cannot edit due to read-only mode or an open transaction on another sheet.', editorView.getPosition());
+        });
 
         const model = editorView.getModel();
         model.setEOL(monaco.editor.EndOfLineSequence.LF);
@@ -166,6 +173,10 @@
             currentVersion = versionId;
         });
     });
+
+    function focus() {
+        editorView.focus();
+    }
 
     function addTextAtCurrentPosition(text) {
         let currentPosition = editorView.getPosition();

@@ -2,8 +2,12 @@ package eu.mihosoft.monacofx;
 
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class SynchronizedTaskExecutor implements TaskExecutor {
+    /** The logger used for all log records. */
+    private static final Logger LOGGER = Logger.getLogger(SynchronizedTaskExecutor.class.getName());
     private final LinkedBlockingDeque<Runnable> linkedBlockingQueue =  new LinkedBlockingDeque<>();
     private final AtomicBoolean shutDownRequested = new AtomicBoolean(false);
     private final Object lock = new Object();
@@ -19,8 +23,8 @@ public class SynchronizedTaskExecutor implements TaskExecutor {
                         try {
                             lock.wait();
                         } catch (InterruptedException e) {
+                            LOGGER.log(Level.INFO, e.getMessage(), e);
                             Thread.currentThread().interrupt();
-                            e.printStackTrace();
                         }
                     }
                     if (initialized) {
