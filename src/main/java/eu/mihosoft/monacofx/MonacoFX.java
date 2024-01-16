@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,12 +48,15 @@ import java.util.stream.Collectors;
 /**
  * This class, in the first place, is responsible for loading and initializing the monaco editor by performing
  * JavaScript code in JavaFX WebView.
- * It provides also some convenience method for changing the status of the editor bz applying JavaScript functions.
- * The Bridge between
+ * It provides also some convenience method for changing the status of the editor by applying JavaScript functions.
+ * It ensures that the web worker has loaded the page before any JavaScript task can be executed. This is done by
+ * using a {@code LinkedBlockingQueue}. The tasks in the queue are started in the order they are added, but they will
+ * run first after index.html is loaded properly.
  */
 public abstract class MonacoFX extends Region {
 
     private static final Logger LOGGER = Logger.getLogger(MonacoFX.class.getName());
+    public static final int WAITING_INTERVALL = 500;
 
     private WebView view;
     private WebEngine engine;
@@ -65,7 +69,12 @@ public abstract class MonacoFX extends Region {
 
     private final Set<AbstractEditorAction> addedActions;
 
-    private TaskExecutor javaScriptTaskExecutor = new SynchronizedTaskExecutor();
+    /**
+     * The blockingQueue is used to add JavaScript tasks which has to be executed in order.
+     */
+    private final LinkedBlockingQueue<Runnable> javaScriptTaskQueue =  new LinkedBlockingQueue<>();
+    private final AtomicBoolean shutDownRequested = new AtomicBoolean(false);
+    private volatile boolean loadSucceeded = false;
 
 
     public MonacoFX() {
@@ -80,46 +89,73 @@ public abstract class MonacoFX extends Region {
 
         editor = new Editor(engine);
 
-        ClipboardBridge clipboardBridge = new ClipboardBridge(getEditor().getDocument(), new SystemClipboardWrapper());
+        initJsExecutorThread();
+        createInitCallback();
+        load(url);
 
-        Runnable loadEditorViewCallback = createInitCallback();
+        addFocusListener();
+    }
 
-        javaScriptTaskExecutor.addTask(loadEditorViewCallback);
-
-        engine.getLoadWorker().stateProperty().addListener((observableValue, state, newState) -> {
-            if (Worker.State.SUCCEEDED == newState) {
-                JSObject window = (JSObject) engine.executeScript("window");
-                window.setMember("clipboardBridge", clipboardBridge);
-                window.setMember("javaBridge", this);
-
-                javaScriptTaskExecutor.start();
-            }
-        });
-
-        engine.load(url);
+    private void addFocusListener() {
         view.focusedProperty().addListener((observableValue, aBoolean, focused) -> {
             if (focused) {
                 submitJavaScript("focus();");
             }
         });
-
     }
 
-    private Runnable createInitCallback() {
+    private void load(String url) {
+        ClipboardBridge clipboardBridge = new ClipboardBridge(getEditor().getDocument(), new SystemClipboardWrapper());
+        engine.getLoadWorker().stateProperty().addListener((observableValue, state, newState) -> {
+            if (Worker.State.SUCCEEDED == newState) {
+                JSObject window = (JSObject) engine.executeScript("window");
+                window.setMember("clipboardBridge", clipboardBridge);
+                window.setMember("javaBridge", this);
+                loadSucceeded = true;
+            }
+        });
+        engine.load(url);
+    }
+
+    private void initJsExecutorThread() {
+        Thread thread = new Thread(() -> {
+
+            while (!loadSucceeded && !shutDownRequested.get()) {
+                try {
+                    Thread.sleep(WAITING_INTERVALL);
+                } catch (InterruptedException e) {
+                    LOGGER.log(Level.INFO, e.getMessage(), e);
+                    Thread.currentThread().interrupt();
+                }
+            }
+            while (!shutDownRequested.get()) {
+                try {
+                    Runnable task = javaScriptTaskQueue.take();
+                    task.run();
+                } catch (InterruptedException e) {
+                    LOGGER.log(Level.INFO, e.getMessage(), e);
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+        thread.start();
+    }
+
+    private void createInitCallback() {
         AtomicBoolean jsDone = new AtomicBoolean(false);
         AtomicInteger attempts = new AtomicInteger();
         Runnable runnable = () -> {
             long startTime = System.currentTimeMillis();
             while (!jsDone.get()) {
+                // check if JS execution is done.
                 if (!jsDone.get()) {
                     try {
-                        Thread.sleep(500);
+                        Thread.sleep(WAITING_INTERVALL);
                     } catch (InterruptedException e) {
                         LOGGER.log(Level.SEVERE, e.getMessage(), e);
                         Thread.currentThread().interrupt();
                     }
                 }
-                // check if JS execution is done.
                 Platform.runLater(() -> {
                     JSObject window = (JSObject) engine.executeScript("window");
                     Object jsEditorObj = window.call("getEditorView");
@@ -138,7 +174,7 @@ public abstract class MonacoFX extends Region {
             long endTime = System.currentTimeMillis();
             log("consumed time executing javascript code for init: " + (endTime - startTime));
         };
-        return runnable;
+        javaScriptTaskQueue.add(runnable);
     }
 
     /**
@@ -147,10 +183,7 @@ public abstract class MonacoFX extends Region {
     abstract public void close();
 
     public void shutdown() {
-        if (javaScriptTaskExecutor != null) {
-            javaScriptTaskExecutor.shutdown();
-            javaScriptTaskExecutor = null;
-        }
+        shutDownRequested.set(true);
     };
 
     public int getScrollHeight() {
@@ -297,7 +330,7 @@ public abstract class MonacoFX extends Region {
     }
     private Object submitJavaScript(Callback<Object, Object> callback) {
         AtomicReference<Object> returnObject = new AtomicReference<>(null);
-        javaScriptTaskExecutor.addTask(() -> Platform.runLater(() -> returnObject.set(callback.call(null))));
+        javaScriptTaskQueue.add(() -> Platform.runLater(() -> returnObject.set(callback.call(null))));
         return returnObject.get();
     }
 
