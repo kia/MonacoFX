@@ -331,12 +331,14 @@ public abstract class MonacoFX extends Region {
     }
     private Object submitJavaScript(Callback<Object, Object> callback) {
         AtomicReference<Object> returnObject = new AtomicReference<>(null);
-        executorService.execute(() -> {
-            if (!loadSucceeded.get()) {
-                throw new RuntimeException("Execution of JavaScript before init!");
-            }
-            Platform.runLater(() -> returnObject.set(callback.call(null)));
-        });
+        if (!executorService.isShutdown()) {
+            executorService.execute(() -> {
+                if (!loadSucceeded.get()) {
+                    throw new RuntimeException("Execution of JavaScript before init!");
+                }
+                Platform.runLater(() -> returnObject.set(callback.call(null)));
+            });
+        }
         return returnObject.get();
     }
 
