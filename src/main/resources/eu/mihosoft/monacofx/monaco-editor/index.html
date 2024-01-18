@@ -114,12 +114,6 @@
             }
         ]);
 
-
-        const messageContribution = editorView.getContribution('editor.contrib.messageController');
-        const diposable = editorView.onDidAttemptReadOnlyEdit(() => {
-            messageContribution.showMessage('Cannot edit due to read-only mode or an open transaction on another sheet.', editorView.getPosition());
-        });
-
         const model = editorView.getModel();
         model.setEOL(monaco.editor.EndOfLineSequence.LF);
 
@@ -174,9 +168,13 @@
         });
     });
 
-    function focus() {
-        editorView.focus();
+    function setReadonlyMessage(msg) {
+        const messageContribution = editorView.getContribution('editor.contrib.messageController');
+        editorView.onDidAttemptReadOnlyEdit(() => {
+            messageContribution.showMessage(msg, editorView.getPosition());
+        });
     }
+
 
     function addTextAtCurrentPosition(text) {
         let currentPosition = editorView.getPosition();
