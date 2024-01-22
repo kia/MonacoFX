@@ -26,6 +26,7 @@ package eu.mihosoft.monacofx;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.concurrent.Worker;
 import javafx.geometry.HPos;
 import javafx.geometry.VPos;
@@ -62,19 +63,20 @@ public abstract class MonacoFX extends Region {
     private static final Logger LOGGER = Logger.getLogger(MonacoFX.class.getName());
     public static final int WAITING_INTERVALL = 500;
     public static final int MAX_NUMBER_OF_JS_EXECUTION_ATTEMPTS = 30;
-    private final WebView view;
-    private final WebEngine engine;
     private final static String EDITOR_HTML_RESOURCE_LOCATION = "/eu/mihosoft/monacofx/monaco-editor/index.html";
+    private WebView view;
+    private final WebEngine engine;
     private final Editor editor;
+
     private Thread.UncaughtExceptionHandler uncaughtExceptionHandler = (t, e) -> {
         LOGGER.log(Level.SEVERE, "Unhandled Exception in thread \"" + t.getName() + "\"", e);
         e.printStackTrace(System.err);
         throw new RuntimeException(e);
-    };;
+    };
     private volatile boolean readOnly;
     private BooleanProperty loadSucceeded = new SimpleBooleanProperty(false);
 
-    private final Set<AbstractEditorAction> addedActions = Collections.synchronizedSet(new HashSet<>());
+    private Set<AbstractEditorAction> addedActions = Collections.synchronizedSet(new HashSet<>());
     /**
      * The newSingleThreadExecutor is used to add JavaScript tasks which has to be executed in order.
      */
@@ -98,8 +100,8 @@ public abstract class MonacoFX extends Region {
         load(url, initCallback);
 
         addFocusListener();
-    }
 
+    }
     public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
         this.uncaughtExceptionHandler = uncaughtExceptionHandler;
     }
@@ -122,6 +124,11 @@ public abstract class MonacoFX extends Region {
         } catch (InterruptedException e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
         }
+        uncaughtExceptionHandler = null;
+        loadSucceeded = null;
+        addedActions.clear();
+        addedActions = null;
+        view = null;
     };
 
     public int getScrollHeight() {
@@ -272,7 +279,7 @@ public abstract class MonacoFX extends Region {
                     LOGGER.log(Level.SEVERE, e.getMessage(), e);
                     return;
                 }
-                if (loadSucceeded.get() && !jsDone.get()) {
+                if (loadSucceeded != null && loadSucceeded.get() && !jsDone.get()) {
                     Platform.runLater(() -> {
                         JSObject window = (JSObject) engine.executeScript("window");
                         Object jsEditorObj = window.call("getEditorView");
