@@ -126,8 +126,10 @@ public abstract class MonacoFX extends Region {
         }
         uncaughtExceptionHandler = null;
         loadSucceeded = null;
-        addedActions.clear();
-        addedActions = null;
+        if (addedActions != null) {
+            addedActions.clear();
+            addedActions = null;
+        }
         view = null;
     };
 
