@@ -124,13 +124,6 @@ public abstract class MonacoFX extends Region {
         } catch (InterruptedException e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
         }
-        uncaughtExceptionHandler = null;
-        loadSucceeded = null;
-        if (addedActions != null) {
-            addedActions.clear();
-            addedActions = null;
-        }
-        view = null;
     };
 
     public int getScrollHeight() {
@@ -201,15 +194,17 @@ public abstract class MonacoFX extends Region {
         submitJavaScript(String.format("removeAction('%s');", actionId));
     }
     public void removeContextMenuAction(AbstractEditorAction action) {
-        if (addedActions.contains(action)) {
+        if (addedActions != null && addedActions.contains(action)) {
             removeActionObject(action);
             addedActions.remove(action);
         }
     }
 
     public void removeContextMenuActions() {
-        addedActions.forEach(this::removeActionObject);
-        addedActions.clear();
+        if (addedActions != null) {
+            addedActions.forEach(this::removeActionObject);
+            addedActions.clear();
+        }
     }
     public boolean isReadOnly() {
         return readOnly;
@@ -281,7 +276,7 @@ public abstract class MonacoFX extends Region {
                     LOGGER.log(Level.SEVERE, e.getMessage(), e);
                     return;
                 }
-                if (loadSucceeded != null && loadSucceeded.get() && !jsDone.get()) {
+                if (loadSucceeded.get() && !jsDone.get()) {
                     Platform.runLater(() -> {
                         JSObject window = (JSObject) engine.executeScript("window");
                         Object jsEditorObj = window.call("getEditorView");
