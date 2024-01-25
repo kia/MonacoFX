@@ -26,7 +26,6 @@ package eu.mihosoft.monacofx;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.value.ChangeListener;
 import javafx.concurrent.Worker;
 import javafx.geometry.HPos;
 import javafx.geometry.VPos;
@@ -125,10 +124,6 @@ public abstract class MonacoFX extends Region {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
         }
     };
-
-    public int getScrollHeight() {
-        return (int) submitJavaScript("editorView.getScrollHeight()");
-    }
 
     public void addLineAtCurrentPosition(String text) {
         submitJavaScript("addTextAtCurrentPosition('" + text + "');");
