@@ -123,6 +123,9 @@ public abstract class MonacoFX extends Region {
         } catch (InterruptedException e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
         }
+        if (!executorService.isShutdown()) {
+            executorService.shutdownNow();
+        }
     };
 
     public void addLineAtCurrentPosition(String text) {
