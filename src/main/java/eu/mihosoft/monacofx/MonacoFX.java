@@ -119,12 +119,14 @@ public abstract class MonacoFX extends Region {
     public void shutdown() {
         executorService.shutdown();
         try {
-            executorService.awaitTermination(1, TimeUnit.SECONDS);
+            boolean termination = executorService.awaitTermination(1, TimeUnit.SECONDS);
+            if (!termination) {
+                executorService.shutdownNow();
+                termination = executorService.awaitTermination(5, TimeUnit.SECONDS);
+                LOGGER.info("MonacoFX JS Threads terminated: " + termination);
+            }
         } catch (InterruptedException e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
-        }
-        if (!executorService.isShutdown()) {
-            executorService.shutdownNow();
         }
     };
 
