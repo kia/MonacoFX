@@ -26,6 +26,7 @@ package eu.mihosoft.monacofx;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.concurrent.Worker;
 import javafx.geometry.HPos;
 import javafx.geometry.VPos;
@@ -93,6 +94,7 @@ public abstract class MonacoFX extends Region {
         executorService = Executors.newSingleThreadExecutor(r -> {
             Thread thread = new Thread(r);
             thread.setUncaughtExceptionHandler(getUncaughtExceptionHandler());
+            thread.setDaemon(true);
             return thread;
         });
         Runnable initCallback = createInitCallback();
@@ -117,17 +119,7 @@ public abstract class MonacoFX extends Region {
     abstract public void close();
 
     public void shutdown() {
-        executorService.shutdown();
-        try {
-            boolean termination = executorService.awaitTermination(1, TimeUnit.SECONDS);
-            if (!termination) {
-                executorService.shutdownNow();
-                termination = executorService.awaitTermination(5, TimeUnit.SECONDS);
-                LOGGER.info("MonacoFX JS Threads terminated: " + termination);
-            }
-        } catch (InterruptedException e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
-        }
+        executorService.shutdownNow();
     };
 
     public void addLineAtCurrentPosition(String text) {
@@ -237,11 +229,12 @@ public abstract class MonacoFX extends Region {
      * This method calls the focus on monaco editor as soon as the focus is requested from the javafx side
      */
     private void addFocusListener() {
-        view.focusedProperty().addListener((observableValue, aBoolean, focused) -> {
+        ChangeListener<Boolean> focusRequestedListener = (observableValue, aBoolean, focused) -> {
             if (focused) {
                 submitJavaScript("editorView.focus();");
             }
-        });
+        };
+        view.focusedProperty().addListener(focusRequestedListener);
     }
     /**
      * loads the page and registers a listener which sets the loadSucceeded flag.
@@ -253,14 +246,15 @@ public abstract class MonacoFX extends Region {
         log("submit init callback!");
         executorService.execute(initCallback);
         ClipboardBridge clipboardBridge = new ClipboardBridge(getEditor().getDocument(), new SystemClipboardWrapper());
-        engine.getLoadWorker().stateProperty().addListener((observableValue, state, newState) -> {
+        ChangeListener<Worker.State> stateChangeListener = (observableValue, state, newState) -> {
             if (Worker.State.SUCCEEDED == newState) {
                 JSObject window = (JSObject) engine.executeScript("window");
                 window.setMember("clipboardBridge", clipboardBridge);
                 window.setMember("javaBridge", this);
                 loadSucceeded.set(true);
             }
-        });
+        };
+        engine.getLoadWorker().stateProperty().addListener(stateChangeListener);
         engine.load(url);
     }
 
